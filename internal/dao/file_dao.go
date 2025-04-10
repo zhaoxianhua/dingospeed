@@ -167,17 +167,15 @@ func (f *FileDao) FileGetGenerator(c echo.Context, repoType, org, repo, commit, 
 	}
 	respHeaders := map[string]string{}
 	pathInfo := pathsInfos[0]
-	if pathInfo.Size == 0 {
-		return util.ErrorProxyTimeout(c)
+	var startPos, endPos int64
+	if pathInfo.Size > 0 { // There exists a file of size 0
+		var headRange = reqHeaders["range"]
+		if headRange == "" {
+			headRange = fmt.Sprintf("bytes=%d-%d", 0, pathInfo.Size-1)
+		}
+		startPos, endPos = parseRangeParams(headRange, pathInfo.Size)
+		endPos = endPos + 1
 	}
-
-	var headRange = reqHeaders["range"]
-	if headRange == "" {
-		headRange = fmt.Sprintf("bytes=%d-%d", 0, pathInfo.Size-1)
-	}
-	startPos, endPos := parseRangeParams(headRange, pathInfo.Size)
-	endPos = endPos + 1
-
 	respHeaders["content-length"] = util.Itoa(endPos - startPos)
 	if commit != "" {
 		respHeaders[strings.ToLower(consts.HUGGINGFACE_HEADER_X_REPO_COMMIT)] = commit
