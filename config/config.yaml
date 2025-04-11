@@ -18,6 +18,10 @@ download:
     remoteFileBufferSize: 67108864  #每个分区文件的结果缓存大小
     prefetchBlocks: 16           #预先读取块的数量
 
+retry:
+    delay: 1       #重试间隔时间，单位秒，默认为1
+    attempts: 3    #重试次数，默认为3
+
 log:
     maxSize: 1      # 日志文件最大的尺寸（MB）
     maxBackups: 10  #保留旧文件的最大个数

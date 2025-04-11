@@ -35,6 +35,7 @@ import (
 	myerr "dingo-hfmirror/pkg/error"
 	"dingo-hfmirror/pkg/util"
 
+	"github.com/avast/retry-go"
 	"github.com/bytedance/sonic"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
@@ -64,11 +65,22 @@ func (f *FileDao) CheckCommitHf(repoType, org, repo, commit, authorization strin
 	if authorization != "" {
 		headers["authorization"] = authorization
 	}
-	resp, err := util.Head(reqUrl, headers, config.SysConfig.GetReqTimeOut())
+	var resp *common.Response
+	err := retry.Do(
+		func() error {
+			var err error
+			resp, err = util.Head(reqUrl, headers, config.SysConfig.GetReqTimeOut())
+			return err
+		},
+		retry.Delay(time.Second),
+		retry.Attempts(3),
+		retry.DelayType(retry.FixedDelay),
+	)
 	if err != nil {
 		zap.S().Errorf("call %s error.%v", reqUrl, err)
 		return false
 	}
+
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTemporaryRedirect {
 		return true
 	}
