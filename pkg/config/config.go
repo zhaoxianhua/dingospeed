@@ -33,6 +33,7 @@ type Config struct {
 	Server   ServerConfig `json:"server" yaml:"server"`
 	Download Download     `json:"download" yaml:"download"`
 	Log      LogConfig    `json:"log" yaml:"log"`
+	Retry    Retry        `json:"retry" yaml:"retry"`
 }
 
 type ServerConfig struct {
@@ -59,8 +60,8 @@ type Download struct {
 }
 
 type Retry struct {
-	Delay    int `json:"delay" yaml:"delay" validate:"min=0,max=30"`
-	Attempts int `json:"attempts" yaml:"attempts" validate:"min=1,max=5"`
+	Delay    int  `json:"delay" yaml:"delay" validate:"min=0,max=60"`
+	Attempts uint `json:"attempts" yaml:"attempts" validate:"min=1,max=5"`
 }
 type LogConfig struct {
 	MaxSize    int `json:"maxSize" yaml:"maxSize"`

@@ -35,7 +35,6 @@ import (
 	myerr "dingo-hfmirror/pkg/error"
 	"dingo-hfmirror/pkg/util"
 
-	"github.com/avast/retry-go"
 	"github.com/bytedance/sonic"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
@@ -65,22 +64,13 @@ func (f *FileDao) CheckCommitHf(repoType, org, repo, commit, authorization strin
 	if authorization != "" {
 		headers["authorization"] = authorization
 	}
-	var resp *common.Response
-	err := retry.Do(
-		func() error {
-			var err error
-			resp, err = util.Head(reqUrl, headers, config.SysConfig.GetReqTimeOut())
-			return err
-		},
-		retry.Delay(time.Second),
-		retry.Attempts(3),
-		retry.DelayType(retry.FixedDelay),
-	)
+	resp, err := util.RetryRequest(func() (*common.Response, error) {
+		return util.Head(reqUrl, headers, config.SysConfig.GetReqTimeOut())
+	})
 	if err != nil {
 		zap.S().Errorf("call %s error.%v", reqUrl, err)
 		return false
 	}
-
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTemporaryRedirect {
 		return true
 	}
@@ -100,7 +90,9 @@ func (f *FileDao) GetCommitHf(repoType, org, repo, commit, authorization string)
 	if authorization != "" {
 		headers["authorization"] = authorization
 	}
-	resp, err := util.Get(reqUrl, headers, config.SysConfig.GetReqTimeOut())
+	resp, err := util.RetryRequest(func() (*common.Response, error) {
+		return util.Get(reqUrl, headers, config.SysConfig.GetReqTimeOut())
+	})
 	if err != nil {
 		zap.S().Errorf("call %s error.%v", reqUrl, err)
 		return f.getCommitHfOffline(repoType, org, repo, commit)
@@ -288,7 +280,9 @@ func (f *FileDao) pathsInfoProxy(targetUrl, authorization string, filePaths []st
 	if authorization != "" {
 		headers["authorization"] = authorization
 	}
-	return util.Post(targetUrl, "application/json", jsonData, headers)
+	return util.RetryRequest(func() (*common.Response, error) {
+		return util.Post(targetUrl, "application/json", jsonData, headers)
+	})
 }
 
 func (f *FileDao) getResourceEtag(hfUrl, authorization string) (string, error) {
@@ -303,7 +297,9 @@ func (f *FileDao) getResourceEtag(hfUrl, authorization string) (string, error) {
 		if authorization != "" {
 			etagHeaders["authorization"] = authorization
 		}
-		resp, err := util.Head(hfUrl, etagHeaders, config.SysConfig.GetReqTimeOut())
+		resp, err := util.RetryRequest(func() (*common.Response, error) {
+			return util.Head(hfUrl, etagHeaders, config.SysConfig.GetReqTimeOut())
+		})
 		if err != nil {
 			return "", err
 		}
