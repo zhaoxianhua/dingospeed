@@ -64,7 +64,9 @@ func (f *FileDao) CheckCommitHf(repoType, org, repo, commit, authorization strin
 	if authorization != "" {
 		headers["authorization"] = authorization
 	}
-	resp, err := util.Head(reqUrl, headers, config.SysConfig.GetReqTimeOut())
+	resp, err := util.RetryRequest(func() (*common.Response, error) {
+		return util.Head(reqUrl, headers, config.SysConfig.GetReqTimeOut())
+	})
 	if err != nil {
 		zap.S().Errorf("call %s error.%v", reqUrl, err)
 		return false
@@ -88,7 +90,9 @@ func (f *FileDao) GetCommitHf(repoType, org, repo, commit, authorization string)
 	if authorization != "" {
 		headers["authorization"] = authorization
 	}
-	resp, err := util.Get(reqUrl, headers, config.SysConfig.GetReqTimeOut())
+	resp, err := util.RetryRequest(func() (*common.Response, error) {
+		return util.Get(reqUrl, headers, config.SysConfig.GetReqTimeOut())
+	})
 	if err != nil {
 		zap.S().Errorf("call %s error.%v", reqUrl, err)
 		return f.getCommitHfOffline(repoType, org, repo, commit)
@@ -276,7 +280,9 @@ func (f *FileDao) pathsInfoProxy(targetUrl, authorization string, filePaths []st
 	if authorization != "" {
 		headers["authorization"] = authorization
 	}
-	return util.Post(targetUrl, "application/json", jsonData, headers)
+	return util.RetryRequest(func() (*common.Response, error) {
+		return util.Post(targetUrl, "application/json", jsonData, headers)
+	})
 }
 
 func (f *FileDao) getResourceEtag(hfUrl, authorization string) (string, error) {
@@ -291,7 +297,9 @@ func (f *FileDao) getResourceEtag(hfUrl, authorization string) (string, error) {
 		if authorization != "" {
 			etagHeaders["authorization"] = authorization
 		}
-		resp, err := util.Head(hfUrl, etagHeaders, config.SysConfig.GetReqTimeOut())
+		resp, err := util.RetryRequest(func() (*common.Response, error) {
+			return util.Head(hfUrl, etagHeaders, config.SysConfig.GetReqTimeOut())
+		})
 		if err != nil {
 			return "", err
 		}

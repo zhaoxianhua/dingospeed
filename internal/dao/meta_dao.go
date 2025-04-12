@@ -17,6 +17,7 @@ package dao
 import (
 	"fmt"
 
+	"dingo-hfmirror/pkg/common"
 	"dingo-hfmirror/pkg/config"
 	"dingo-hfmirror/pkg/consts"
 	"dingo-hfmirror/pkg/util"
@@ -79,7 +80,9 @@ func (m *MetaDao) MetaProxyGenerator(c echo.Context, repoType, org, repo, commit
 		headers["authorization"] = authorization
 	}
 	if method == consts.RequestTypeHead {
-		resp, err := util.Head(metaUrl, headers, config.SysConfig.GetReqTimeOut())
+		resp, err := util.RetryRequest(func() (*common.Response, error) {
+			return util.Head(metaUrl, headers, config.SysConfig.GetReqTimeOut())
+		})
 		if err != nil {
 			zap.S().Errorf("head %s err.%v", metaUrl, err)
 			return util.ErrorEntryNotFound(c)
@@ -87,7 +90,9 @@ func (m *MetaDao) MetaProxyGenerator(c echo.Context, repoType, org, repo, commit
 		extractHeaders := resp.ExtractHeaders(resp.Headers)
 		return util.ResponseHeaders(c, extractHeaders)
 	} else if method == consts.RequestTypeGet {
-		resp, err := util.Get(metaUrl, headers, config.SysConfig.GetReqTimeOut())
+		resp, err := util.RetryRequest(func() (*common.Response, error) {
+			return util.Get(metaUrl, headers, config.SysConfig.GetReqTimeOut())
+		})
 		if err != nil {
 			zap.S().Errorf("get %s err.%v", metaUrl, err)
 			return util.ErrorEntryNotFound(c)
