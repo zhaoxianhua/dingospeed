@@ -35,7 +35,7 @@ func NewMetaDao(fileDao *FileDao) *MetaDao {
 	}
 }
 
-func (m *MetaDao) MetaGetGenerator(c echo.Context, repoType, org, repo, commit, method string) error {
+func (m *MetaDao) MetaGetGenerator(c echo.Context, repoType, org, repo, commit, method string, writeResp bool) error {
 	orgRepo := util.GetOrgRepo(org, repo)
 	apiDir := fmt.Sprintf("%s/api/%s/%s/revision/%s", config.SysConfig.Repos(), repoType, orgRepo, commit)
 	apiMetaPath := fmt.Sprintf("%s/%s", apiDir, fmt.Sprintf("meta_%s.json", method))
@@ -50,7 +50,7 @@ func (m *MetaDao) MetaGetGenerator(c echo.Context, repoType, org, repo, commit, 
 	if util.FileExists(apiMetaPath) && !config.SysConfig.Online() {
 		return m.MetaCacheGenerator(c, repo, apiMetaPath)
 	} else {
-		return m.MetaProxyGenerator(c, repoType, org, repo, commit, method, authorization, apiMetaPath)
+		return m.MetaProxyGenerator(c, repoType, org, repo, commit, method, authorization, apiMetaPath, writeResp)
 	}
 }
 
@@ -71,7 +71,7 @@ func (m *MetaDao) MetaCacheGenerator(c echo.Context, repo, apiMetaPath string) e
 
 // 请求api文件
 
-func (m *MetaDao) MetaProxyGenerator(c echo.Context, repoType, org, repo, commit, method, authorization, apiMetaPath string) error {
+func (m *MetaDao) MetaProxyGenerator(c echo.Context, repoType, org, repo, commit, method, authorization, apiMetaPath string, writeResp bool) error {
 	orgRepo := util.GetOrgRepo(org, repo)
 	metaUrl := fmt.Sprintf("%s/api/%s/%s/revision/%s", config.SysConfig.GetHFURLBase(), repoType, orgRepo, commit)
 	headers := map[string]string{}
@@ -93,12 +93,13 @@ func (m *MetaDao) MetaProxyGenerator(c echo.Context, repoType, org, repo, commit
 			return util.ErrorEntryNotFound(c)
 		}
 		extractHeaders := resp.ExtractHeaders(resp.Headers)
-		var bodyStreamChan = make(chan []byte, consts.RespChanSize)
-		bodyStreamChan <- resp.Body
-		close(bodyStreamChan)
-		err = util.ResponseStream(c, repo, extractHeaders, bodyStreamChan)
-		if err != nil {
-			return err
+		if writeResp {
+			var bodyStreamChan = make(chan []byte, consts.RespChanSize)
+			bodyStreamChan <- resp.Body
+			close(bodyStreamChan)
+			if err = util.ResponseStream(c, repo, extractHeaders, bodyStreamChan); err != nil {
+				return err
+			}
 		}
 		if err = m.fileDao.WriteCacheRequest(apiMetaPath, resp.StatusCode, extractHeaders, resp.Body); err != nil {
 			zap.S().Errorf("writeCacheRequest err.%v", err)
