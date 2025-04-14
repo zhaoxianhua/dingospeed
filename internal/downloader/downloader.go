@@ -16,7 +16,6 @@ package downloader
 
 import (
 	"context"
-	"os"
 	"time"
 
 	"dingo-hfmirror/pkg/common"
@@ -27,24 +26,14 @@ import (
 
 // 整个文件
 func FileDownload(ctx context.Context, hfUrl, savePath, fileName, authorization string, fileSize, startPos, endPos int64, responseChan chan []byte) {
-	var dingFile *DingCache
-	if _, err := os.Stat(savePath); err == nil {
-		if dingFile, err = NewDingCache(savePath, config.SysConfig.Download.BlockSize); err != nil {
-			zap.S().Errorf("NewDingCache err.%v", err)
-			return
-		}
-	} else {
-		if dingFile, err = NewDingCache(savePath, config.SysConfig.Download.BlockSize); err != nil {
-			zap.S().Errorf("NewDingCache err.%v", err)
-			return
-		}
-		if err = dingFile.Resize(fileSize); err != nil {
-			zap.S().Errorf("Resize err.%v", err)
-			return
-		}
-	}
-	defer dingFile.Close()
 	defer close(responseChan)
+	dingCacheManager := GetInstance()
+	dingFile, err := dingCacheManager.GetDingFile(savePath, fileSize)
+	if err != nil {
+		zap.S().Errorf("GetDingFile err.%v", err)
+		return
+	}
+	defer dingCacheManager.ReleasedDingFile(savePath)
 	tasks := getContiguousRanges(dingFile, startPos, endPos)
 	var remoteTasks []*RemoteFileTask
 	taskSize := len(tasks)

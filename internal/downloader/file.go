@@ -24,7 +24,6 @@ import (
 	"time"
 
 	cache "dingo-hfmirror/internal/data"
-	"dingo-hfmirror/pkg/common"
 	"dingo-hfmirror/pkg/config"
 	"dingo-hfmirror/pkg/util"
 )
@@ -143,7 +142,6 @@ type DingCache struct {
 	header     *DingCacheHeader
 	isOpen     bool
 	headerLock sync.RWMutex
-	datas      *common.SafeMap[int64, []byte]
 }
 
 // NewDingCache 创建一个新的 DingCache 对象
@@ -154,7 +152,6 @@ func NewDingCache(path string, blockSize int64) (*DingCache, error) {
 		isOpen:     false,
 		headerLock: sync.RWMutex{},
 	}
-	cache.datas = common.NewSafeMap[int64, []byte]()
 	if err := cache.Open(path, blockSize); err != nil {
 		return nil, err
 	}
@@ -445,15 +442,4 @@ func (c *DingCache) Resize(fileSize int64) error {
 func (c *DingCache) getBlockKey(blockIndex int64) string {
 	simpleKey := fmt.Sprintf("%s/%d", c.path, blockIndex)
 	return util.Md5(simpleKey)
-}
-
-func (c *DingCache) Set(key int64, b []byte) {
-	c.datas.Set(key, b)
-}
-
-func (c *DingCache) StartWrite() {
-	go func() {
-
-	}()
-
 }
