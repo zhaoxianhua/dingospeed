@@ -3,6 +3,7 @@ package downloader
 import (
 	"os"
 	"sync"
+	"sync/atomic"
 
 	"dingo-hfmirror/pkg/common"
 	"dingo-hfmirror/pkg/config"
@@ -19,7 +20,7 @@ func GetInstance() *DingCacheManager {
 	once.Do(func() {
 		instance = &DingCacheManager{
 			dingCacheMap: common.NewSafeMap[string, *DingCache](),
-			dingCacheRef: common.NewSafeMap[string, int64](),
+			dingCacheRef: common.NewSafeMap[string, *atomic.Int64](),
 		}
 	})
 	return instance
@@ -27,7 +28,7 @@ func GetInstance() *DingCacheManager {
 
 type DingCacheManager struct {
 	dingCacheMap *common.SafeMap[string, *DingCache]
-	dingCacheRef *common.SafeMap[string, int64]
+	dingCacheRef *common.SafeMap[string, *atomic.Int64]
 	mu           sync.RWMutex
 }
 
@@ -38,7 +39,7 @@ func (f *DingCacheManager) GetDingFile(savePath string, fileSize int64) (*DingCa
 	var ok bool
 	if dingFile, ok = f.dingCacheMap.Get(savePath); ok {
 		if refCount, ok := f.dingCacheRef.Get(savePath); ok {
-			f.dingCacheRef.Set(savePath, refCount+1)
+			refCount.Add(1)
 		} else {
 			zap.S().Errorf("dingCacheRef key is not exist.key:%s", savePath)
 		}
@@ -60,7 +61,9 @@ func (f *DingCacheManager) GetDingFile(savePath string, fileSize int64) (*DingCa
 			}
 		}
 		f.dingCacheMap.Set(savePath, dingFile)
-		f.dingCacheRef.Set(savePath, 1)
+		var counter atomic.Int64
+		counter.Store(1)
+		f.dingCacheRef.Set(savePath, &counter)
 	}
 	return dingFile, nil
 }
@@ -72,9 +75,9 @@ func (f *DingCacheManager) ReleasedDingFile(savePath string) {
 	if !ok {
 		return
 	}
-	refCount--
+	refCount.Add(-1)
 	zap.S().Debugf("ReleasedDingFile:%s, refcount:%d", savePath, refCount)
-	if refCount <= 0 {
+	if refCount.Load() <= 0 {
 		if dingFile, ok := f.dingCacheMap.Get(savePath); ok {
 			dingFile.Close()
 		}

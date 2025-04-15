@@ -142,6 +142,7 @@ type DingCache struct {
 	header     *DingCacheHeader
 	isOpen     bool
 	headerLock sync.RWMutex
+	fileLock   sync.RWMutex
 }
 
 // NewDingCache 创建一个新的 DingCache 对象
@@ -197,6 +198,8 @@ func (c *DingCache) Close() error {
 	if !c.isOpen {
 		return errors.New("This file has been close.")
 	}
+	c.fileLock.Lock()
+	defer c.fileLock.Unlock()
 	if err := c.flushHeader(); err != nil {
 		return err
 	}
@@ -206,10 +209,9 @@ func (c *DingCache) Close() error {
 	return nil
 }
 
-// flushHeader 刷新头部信息到文件
 func (c *DingCache) flushHeader() error {
-	c.headerLock.Lock()
-	defer c.headerLock.Unlock()
+	// c.headerLock.Lock()
+	// defer c.headerLock.Unlock()
 	f, err := os.OpenFile(c.path, os.O_RDWR, 0644)
 	if err != nil {
 		return err
@@ -257,10 +259,9 @@ func (c *DingCache) resizeHeader(blockNum, fileSize int64) error {
 	return c.header.ValidHeader()
 }
 
-// setHeaderBlock 设置头部块信息
 func (c *DingCache) setHeaderBlock(blockIndex int64) error {
-	c.headerLock.Lock()
-	defer c.headerLock.Unlock()
+	// c.headerLock.Lock()
+	// defer c.headerLock.Unlock()
 	return c.header.BlockMask.Set(blockIndex)
 }
 
@@ -280,14 +281,6 @@ func (c *DingCache) padBlock(rawBlock []byte) []byte {
 	return rawBlock
 }
 
-// Flush 刷新缓存
-func (c *DingCache) Flush() error {
-	if !c.isOpen {
-		return errors.New("this file has been close")
-	}
-	return c.flushHeader()
-}
-
 // HasBlock 检查块是否存在
 func (c *DingCache) HasBlock(blockIndex int64) (bool, error) {
 	return c.testHeaderBlock(blockIndex)
@@ -297,7 +290,7 @@ func (c *DingCache) HasBlock(blockIndex int64) (bool, error) {
 
 func (c *DingCache) ReadBlock(blockIndex int64) ([]byte, error) {
 	if !c.isOpen {
-		return nil, errors.New("This file has been closed.")
+		return nil, errors.New("this file has been closed")
 	}
 	if blockIndex >= c.getBlockNumber() {
 		return nil, errors.New("Invalid block index.")
@@ -326,32 +319,36 @@ func (c *DingCache) ReadBlock(blockIndex int64) ([]byte, error) {
 	if _, err := f.Read(rawBlock); err != nil {
 		return nil, err
 	}
+	var cacheFlag bool
 	for blockOffset := int64(1); blockOffset <= config.SysConfig.Download.PrefetchBlocks; blockOffset++ {
-		if blockIndex+blockOffset >= c.getBlockNumber() {
+		newOffsetBlock := blockIndex + blockOffset
+		if newOffsetBlock >= c.getBlockNumber() {
 			break
 		}
-		hasNextBlock, err := c.HasBlock(blockIndex + blockOffset)
+		hasNextBlock, err := c.HasBlock(newOffsetBlock)
 		if err != nil {
 			return nil, err
 		}
-		key = c.getBlockKey(blockIndex + blockOffset)
-		if !hasNextBlock {
-			cache.FileBlockCache.SetWithTTL(key, nil, cost, ttl)
-		} else {
+		if hasNextBlock {
+			key = c.getBlockKey(newOffsetBlock)
 			prefetchRawBlock := make([]byte, c.getBlockSize())
 			if _, err := f.Read(prefetchRawBlock); err != nil {
 				return nil, err
 			}
 			blockByte := c.padBlock(prefetchRawBlock)
 			cache.FileBlockCache.SetWithTTL(key, blockByte, cost, ttl)
+			cacheFlag = true
+		} else {
+			break
 		}
 	}
-	cache.FileBlockCache.Wait()
+	if cacheFlag {
+		cache.FileBlockCache.Wait()
+	}
 	block := c.padBlock(rawBlock)
 	return block, nil
 }
 
-// WriteBlock 写入块数据
 func (c *DingCache) WriteBlock(blockIndex int64, blockBytes []byte) error {
 	if !c.isOpen {
 		return errors.New("this file has been closed")
@@ -381,6 +378,8 @@ func (c *DingCache) WriteBlock(blockIndex int64, blockBytes []byte) error {
 			return err
 		}
 	}
+	c.fileLock.Lock()
+	defer c.fileLock.Unlock()
 	if err = c.setHeaderBlock(blockIndex); err != nil {
 		return err
 	}
@@ -429,6 +428,8 @@ func (c *DingCache) Resize(fileSize int64) error {
 	}
 	bs := c.getBlockSize()
 	newBlockNum := (fileSize + bs - 1) / bs
+	c.fileLock.Lock()
+	defer c.fileLock.Unlock()
 	if err := c.resizeFileSize(fileSize); err != nil {
 		return err
 	}
