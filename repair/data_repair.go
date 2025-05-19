@@ -17,10 +17,10 @@ import (
 )
 
 var (
-	repoPath string
-	repoType string
-	org      string
-	repo     string
+	repoPathParam string
+	repoTypeParam string
+	orgParam      string
+	repoParam     string
 )
 
 type CommitHfSha struct {
@@ -31,26 +31,26 @@ type CommitHfSha struct {
 }
 
 func init() {
-	flag.StringVar(&repoPath, "repoPath", "./repos", "仓库路径")
-	flag.StringVar(&repoType, "repoType", "models", "类型")
-	flag.StringVar(&org, "org", "", "组织")
-	flag.StringVar(&repo, "repo", "", "仓库")
+	flag.StringVar(&repoPathParam, "repoPath", "./repos", "仓库路径")
+	flag.StringVar(&repoTypeParam, "repoType", "models", "类型")
+	flag.StringVar(&orgParam, "org", "", "组织")
+	flag.StringVar(&repoParam, "repo", "", "仓库")
 	flag.Parse()
 }
 
 func main() {
 	fmt.Println("starting data repair....")
-	if repoPath == "" || repoType == "" {
+	if repoPathParam == "" || repoTypeParam == "" {
 		log.Errorf("repoPath,repoType不能为空")
 		return
 	}
-	if org != "" && repo != "" {
-		repoRepair(repo)
+	if orgParam != "" && repoParam != "" {
+		repoRepair(repoPathParam, repoTypeParam, orgParam, repoParam)
 	} else {
-		if org != "" && repo == "" {
-			orgRepair(repoPath, repoType, org)
-		} else if org == "" && repo == "" {
-			typePath := fmt.Sprintf("%s/api/%s", repoPath, repoType)
+		if orgParam != "" && repoParam == "" {
+			orgRepair(repoPathParam, repoTypeParam, orgParam)
+		} else if orgParam == "" && repoParam == "" {
+			typePath := fmt.Sprintf("%s/api/%s", repoPathParam, repoTypeParam)
 			// 读取目录内容
 			orgEntries, err := os.ReadDir(typePath)
 			if err != nil {
@@ -59,12 +59,12 @@ func main() {
 			}
 			for _, entry := range orgEntries {
 				if entry.IsDir() {
-					orgRepair(repoPath, repoType, entry.Name())
+					orgRepair(repoPathParam, repoTypeParam, entry.Name())
 				}
 			}
 		}
 	}
-	headsPath := fmt.Sprintf("%s/heads", repoPath)
+	headsPath := fmt.Sprintf("%s/heads", repoPathParam)
 	if exist := util.FileExists(headsPath); exist {
 		err := os.RemoveAll(headsPath)
 		if err != nil {
@@ -84,12 +84,12 @@ func orgRepair(repoPath, repoType, org string) {
 	}
 	for _, entry := range repoEntries {
 		if entry.IsDir() {
-			repoRepair(entry.Name())
+			repoRepair(repoPath, repoType, org, entry.Name())
 		}
 	}
 }
 
-func repoRepair(repo string) {
+func repoRepair(repoPath, repoType, org, repo string) {
 	if repo == "" {
 		panic("repo is null")
 	}
@@ -121,14 +121,14 @@ func repoRepair(repo string) {
 	for _, item := range sha.Siblings {
 		remoteReqFilePathMap[item.Rfilename] = nil
 	}
-	getPathInfoOid(remoteReqFilePathMap, fmt.Sprintf("%s/%s", org, repo), sha.Sha)
+	getPathInfoOid(remoteReqFilePathMap, repoType, fmt.Sprintf("%s/%s", org, repo), sha.Sha)
 	for _, item := range sha.Siblings {
 		fileName := item.Rfilename
 		pathInfo, ok := remoteReqFilePathMap[fileName]
 		if !ok {
 			continue
 		}
-		if err = updatePathInfo(sha.Sha, fileName, pathInfo); err != nil {
+		if err = updatePathInfo(repoPath, repoType, org, repo, sha.Sha, fileName, pathInfo); err != nil {
 			continue
 		}
 		var etag string
@@ -171,7 +171,7 @@ func repoRepair(repo string) {
 	log.Infof("end repair：%s/%s/%s", repoType, org, repo)
 }
 
-func updatePathInfo(commit, fileName string, pathInfo *common.PathsInfo) error {
+func updatePathInfo(repoPath, repoType, org, repo, commit, fileName string, pathInfo *common.PathsInfo) error {
 	pathInfoPath := fmt.Sprintf("%s/api/%s/%s/%s/paths-info/%s/%s/paths-info_post.json", repoPath, repoType, org, repo, commit, fileName)
 	if exist := util.FileExists(pathInfoPath); !exist {
 		return myerr.New("file is not exist")
@@ -221,7 +221,7 @@ func ReadCacheRequest(apiPath string) (*common.CacheContent, error) {
 	return &cacheContent, nil
 }
 
-func getPathInfoOid(remoteReqFilePathMap map[string]*common.PathsInfo, orgRepo, commit string) {
+func getPathInfoOid(remoteReqFilePathMap map[string]*common.PathsInfo, repoType, orgRepo, commit string) {
 	filePaths := make([]string, 0)
 	for k := range remoteReqFilePathMap {
 		filePaths = append(filePaths, k)
