@@ -5,7 +5,7 @@ server:
     pprof: true
     pprofPort: 6060
     metrics: true
-    online: true #true表示hf-mirror找不到，去hfNetLoc地址查找并下载模型数据，false表示本地如果没有，直接返回没有
+    online: true #true表示本地找不到，去hfNetLoc地址查找并下载模型数据，false表示本地如果没有，直接返回没有
     repos: ./repos
     hfNetLoc: hf-mirror.com   # huggingface.co     hf-mirror.com
     hfScheme: https

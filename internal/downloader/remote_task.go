@@ -59,11 +59,9 @@ func (r RemoteFileTask) DoTask() {
 	curPos := rangeStartPos
 	streamCache := bytes.Buffer{}
 	lastBlock, lastBlockStartPos, lastBlockEndPos := getBlockInfo(curPos, r.DingFile.getBlockSize(), r.DingFile.GetFileSize()) // 块编号，开始位置，结束位置
-	defer func() {
-		close(r.Queue)
-	}()
 	go func() {
 		defer func() {
+			close(r.Queue)
 			wg.Done()
 		}()
 		for {
@@ -149,6 +147,9 @@ func (r RemoteFileTask) DoTask() {
 				zap.S().Errorf("last writeBlock err.%v", err)
 			}
 			zap.S().Debugf("file:%s, taskNo:%d, last block：%d write done, range：%d-%d.", r.FileName, r.TaskNo, lastBlock, lastBlockStartPos, lastBlockEndPos)
+			if err := util.CreateSymlinkIfNotExists(r.blobsFile, r.filesPath); err != nil {
+				zap.S().Errorf("filesPath:%s is not link", r.filesPath)
+			}
 		}
 	}
 	if curPos != rangeEndPos {
@@ -161,15 +162,17 @@ func (r RemoteFileTask) OutResult() {
 		select {
 		case data, ok := <-r.Queue:
 			if !ok {
+				zap.S().Debugf("OutResult r.Queue close %s", r.FileName)
 				return
 			}
 			select {
 			case r.ResponseChan <- data:
 			case <-r.Context.Done():
+				zap.S().Debugf("OutResult remote Context.Done() %s", r.FileName)
 				return
 			}
 		case <-r.Context.Done():
-			zap.S().Warnf("remote ctx err :%s", r.FileName)
+			zap.S().Debugf("OutResult remote ctx err, fileName:%s,err:%v", r.FileName, r.Context.Err())
 			return
 		}
 	}
@@ -186,12 +189,12 @@ func (r RemoteFileTask) getFileRangeFromRemote(wg *sync.WaitGroup, startPos, end
 	}
 	headers["range"] = fmt.Sprintf("bytes=%d-%d", startPos, endPos-1)
 	defer func() {
+		close(contentChan)
 		wg.Done()
 	}()
 	var rawData []byte
 	chunkByteLen := 0
 	var contentEncoding, contentLengthStr = "", ""
-	defer close(contentChan)
 
 	if err := util.GetStream(r.hfUrl, headers, config.SysConfig.GetReqTimeOut(), func(resp *http.Response) {
 		contentEncoding = resp.Header.Get("content-encoding")
@@ -199,6 +202,7 @@ func (r RemoteFileTask) getFileRangeFromRemote(wg *sync.WaitGroup, startPos, end
 		for {
 			select {
 			case <-r.Context.Done():
+				zap.S().Warnf("getFileRangeFromRemote Context.Done err :%s", r.FileName)
 				return
 			default:
 				chunk := make([]byte, config.SysConfig.Download.RespChunkSize)
