@@ -139,7 +139,7 @@ func repoRepair(repoPath, repoType, org, repo string) {
 		}
 		filePath = fmt.Sprintf("%s/files/%s/%s/%s/resolve/%s/%s", repoPath, repoType, org, repo, sha.Sha, fileName)
 		if exist := util.FileExists(filePath); !exist {
-			log.Errorf(fmt.Sprintf("该文件%s不存在.", filePath))
+			log.Warnf(fmt.Sprintf("该文件%s不存在.", filePath))
 			continue
 		}
 		newBlobsFilePath := fmt.Sprintf("%s/files/%s/%s/%s/blobs/%s", repoPath, repoType, org, repo, etag)
