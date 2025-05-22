@@ -53,7 +53,7 @@ func NewFileDao() *FileDao {
 	return &FileDao{}
 }
 
-func (f *FileDao) CheckCommitHf(repoType, org, repo, commit, authorization string) bool {
+func (f *FileDao) CheckCommitHf(repoType, org, repo, commit, authorization string) (int, error) {
 	orgRepo := util.GetOrgRepo(org, repo)
 	var reqUrl string
 	if commit == "" {
@@ -70,13 +70,13 @@ func (f *FileDao) CheckCommitHf(repoType, org, repo, commit, authorization strin
 	})
 	if err != nil {
 		zap.S().Errorf("call %s error.%v", reqUrl, err)
-		return false
+		return http.StatusInternalServerError, err
 	}
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTemporaryRedirect {
-		return true
+		return resp.StatusCode, nil
 	}
 	zap.S().Errorf("CheckCommitHf statusCode:%d", resp.StatusCode)
-	return false
+	return resp.StatusCode, myerr.New("request commit err")
 }
 
 // 若为离线或在线请求失败，将进行本地仓库查找。
