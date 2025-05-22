@@ -9,7 +9,6 @@ server:
     repos: ./repos
     hfNetLoc: hf-mirror.com   # huggingface.co     hf-mirror.com
     hfScheme: https
-    hfLfsNetLoc : cdn-lfs.huggingface.co
 
 download:
     blockSize: 8388608           #默认文件块大小为8MB（8388608），单位字节，1048576（1MB）
