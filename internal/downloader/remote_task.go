@@ -111,7 +111,7 @@ func (r RemoteFileTask) DoTask() {
 								if err = r.DingFile.WriteBlock(lastBlock, rawBlock); err != nil {
 									zap.S().Errorf("writeBlock err.%v", err)
 								}
-								zap.S().Debugf("file:%s, taskNo:%d, block：%d write done, range：%d-%d.", r.FileName, r.TaskNo, lastBlock, lastBlockStartPos, lastBlockEndPos)
+								zap.S().Debugf("repo:%s, file:%s, taskNo:%d, block：%d write done, range：%d-%d.", r.FileName, r.TaskNo, lastBlock, lastBlockStartPos, lastBlockEndPos)
 							}
 						}
 						nextBlock := streamCacheBytes[splitPos:] // 下一个块的数据
