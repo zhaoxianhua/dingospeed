@@ -24,7 +24,9 @@ import (
 
 func wireApp(configConfig *config.Config) (*app.App, func(), error) {
 	echo := server.NewEngine()
-	fileDao := dao.NewFileDao()
+	schedulerDao := dao.NewSchedulerDao()
+	downloaderDao := dao.NewDownloaderDao(schedulerDao)
+	fileDao := dao.NewFileDao(downloaderDao)
 	fileService := service.NewFileService(fileDao)
 	sysService := service.NewSysService()
 	fileHandler := handler.NewFileHandler(fileService, sysService)
@@ -34,7 +36,9 @@ func wireApp(configConfig *config.Config) (*app.App, func(), error) {
 	sysHandler := handler.NewSysHandler(sysService)
 	httpRouter := router.NewHttpRouter(echo, fileHandler, metaHandler, sysHandler)
 	httpServer := server.NewServer(configConfig, echo, httpRouter)
-	appApp := newApp(httpServer)
+	schedulerService := service.NewSchedulerService(schedulerDao)
+	schedulerServer := server.NewSchedulerServer(schedulerService)
+	appApp := newApp(httpServer, schedulerServer)
 	return appApp, func() {
 	}, nil
 }

@@ -1,10 +1,10 @@
 server:
     mode: debug
     host: 0.0.0.0
-    port: 8091
-    pprof: false
+    port: 8090
+    pprof: true
     pprofPort: 6060
-    metrics: false
+    metrics: true
     online: true #true表示本地找不到，去hfNetLoc地址查找并下载模型数据，false表示本地如果没有，直接返回没有
     repos: ./repos
     hfNetLoc: hf-mirror.com   # huggingface.co     hf-mirror.com
@@ -12,7 +12,7 @@ server:
 
 scheduler:
     mode: cluster    #运行的两种模式：standalone&cluster,default:standalone
-    instanceId: hs-online
+    instanceId: mas-online
     addr: 127.0.0.1:9091
     heartbeatPeriod: 5
     batchSaveNum: 5

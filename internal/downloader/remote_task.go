@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"sync"
 
+	"dingospeed/internal/data"
 	"dingospeed/pkg/config"
 	"dingospeed/pkg/consts"
 	"dingospeed/pkg/prom"
@@ -31,14 +32,18 @@ import (
 )
 
 type RemoteFileTask struct {
-	DownloadTask
-	authorization string
-	hfUrl         string
+	*DownloadTask
+	Authorization string
+	Domain        string
+	Uri           string
+	DataType      string
+	Etag          string
 	Queue         chan []byte `json:"-"`
 }
 
 func NewRemoteFileTask(taskNo int, rangeStartPos int64, rangeEndPos int64) *RemoteFileTask {
 	r := &RemoteFileTask{}
+	r.DownloadTask = &DownloadTask{}
 	r.TaskNo = taskNo
 	r.RangeStartPos = rangeStartPos
 	r.RangeEndPos = rangeEndPos
@@ -53,12 +58,12 @@ func (r RemoteFileTask) DoTask() {
 	)
 	contentChan := make(chan []byte, consts.RespChanSize)
 	rangeStartPos, rangeEndPos := r.RangeStartPos, r.RangeEndPos
-	zap.S().Infof("remote file download:%s/%s, taskNo:%d, size:%d, startPos:%d, endPos:%d", r.orgRepo, r.FileName, r.TaskNo, r.TaskSize, rangeStartPos, rangeEndPos)
+	zap.S().Infof("remote dotask:%s/%s, taskNo:%d, size:%d, startPos:%d, endPos:%d", r.OrgRepo, r.FileName, r.TaskNo, r.TaskSize, rangeStartPos, rangeEndPos)
 	wg.Add(2)
 	go r.getFileRangeFromRemote(&wg, rangeStartPos, rangeEndPos, contentChan)
-	curPos := rangeStartPos
+	curPos, lastReportPos := rangeStartPos, rangeStartPos
 	streamCache := bytes.Buffer{}
-	lastBlock, lastBlockStartPos, lastBlockEndPos := getBlockInfo(curPos, r.DingFile.getBlockSize(), r.DingFile.GetFileSize()) // 块编号，开始位置，结束位置
+	lastBlock, lastBlockStartPos, lastBlockEndPos := GetBlockInfo(curPos, r.DingFile.GetBlockSize(), r.DingFile.GetFileSize()) // 块编号，开始位置，结束位置
 	blockNumber := r.DingFile.getBlockNumber()
 	go func() {
 		defer func() {
@@ -85,13 +90,13 @@ func (r RemoteFileTask) DoTask() {
 					if config.SysConfig.EnableMetric() {
 						// 原子性地更新总下载字节数
 						source := util.Itoa(r.Context.Value(consts.PromSource))
-						prom.PromRequestByteCounter(prom.RequestRemoteByte, source, chunkLen, r.orgRepo)
+						prom.PromRequestByteCounter(prom.RequestRemoteByte, source, chunkLen, r.OrgRepo)
 					}
 
 					if len(chunk) != 0 {
 						streamCache.Write(chunk)
 					}
-					curBlock = curPos / r.DingFile.getBlockSize()
+					curBlock = curPos / r.DingFile.GetBlockSize()
 					// 若是一个新的数据块，则将上一个数据块持久化。
 					if curBlock != lastBlock {
 						splitPos := lastBlockEndPos - max(lastBlockStartPos, rangeStartPos)
@@ -103,7 +108,7 @@ func (r RemoteFileTask) DoTask() {
 						}
 						streamCacheBytes := streamCache.Bytes()
 						rawBlock := streamCacheBytes[:splitPos] // 当前块的数据
-						if int64(len(rawBlock)) == r.DingFile.getBlockSize() {
+						if int64(len(rawBlock)) == r.DingFile.GetBlockSize() {
 							hasBlockBool, err := r.DingFile.HasBlock(lastBlock)
 							if err != nil {
 								zap.S().Errorf("HasBlock err.%v", err)
@@ -112,17 +117,20 @@ func (r RemoteFileTask) DoTask() {
 								if err = r.DingFile.WriteBlock(lastBlock, rawBlock); err != nil {
 									zap.S().Errorf("writeBlock err.%v", err)
 								}
-								zap.S().Debugf("%s/%s, taskNo:%d, block：%d(%d)write done, range：%d-%d.", r.orgRepo, r.FileName, r.TaskNo, lastBlock, blockNumber, lastBlockStartPos, lastBlockEndPos)
+								zap.S().Debugf("from:%s, %s/%s, taskNo:%d, block：%d(%d)write done, range：%d-%d.", r.Domain, r.OrgRepo, r.FileName, r.TaskNo, lastBlock, blockNumber, lastBlockStartPos, lastBlockEndPos)
+								data.ReportFileProcess(r.Context, lastReportPos, lastBlockEndPos, consts.StatusDownloading)
+								lastReportPos = lastBlockEndPos
 							}
 						}
 						nextBlock := streamCacheBytes[splitPos:] // 下一个块的数据
 						streamCache.Truncate(0)
 						streamCache.Write(nextBlock)
-						lastBlock, lastBlockStartPos, lastBlockEndPos = getBlockInfo(curPos, r.DingFile.getBlockSize(), r.DingFile.GetFileSize())
+						lastBlock, lastBlockStartPos, lastBlockEndPos = GetBlockInfo(curPos, r.DingFile.GetBlockSize(), r.DingFile.GetFileSize())
 					}
 				}
 			case <-r.Context.Done():
-				zap.S().Warnf("file:%s/%s, task %d, ctx done, DoTask exit.", r.orgRepo, r.FileName, r.TaskNo)
+				zap.S().Warnf("file:%s/%s, task %d, ctx done, DoTask exit.", r.OrgRepo, r.FileName, r.TaskNo)
+				data.ReportFileProcess(r.Context, 0, 0, consts.StatusDownloadBreak)
 				return
 			}
 		}
@@ -131,13 +139,13 @@ func (r RemoteFileTask) DoTask() {
 	rawBlock := streamCache.Bytes()
 	if curBlock == r.DingFile.getBlockNumber()-1 {
 		// 对不足一个block的数据做补全
-		if int64(len(rawBlock)) == r.DingFile.GetFileSize()%r.DingFile.getBlockSize() {
-			padding := bytes.Repeat([]byte{0}, int(r.DingFile.getBlockSize())-len(rawBlock))
+		if int64(len(rawBlock)) == r.DingFile.GetFileSize()%r.DingFile.GetBlockSize() {
+			padding := bytes.Repeat([]byte{0}, int(r.DingFile.GetBlockSize())-len(rawBlock))
 			rawBlock = append(rawBlock, padding...)
 		}
 		lastBlock = curBlock
 	}
-	if int64(len(rawBlock)) == r.DingFile.getBlockSize() {
+	if int64(len(rawBlock)) == r.DingFile.GetBlockSize() {
 		hasBlockBool, err := r.DingFile.HasBlock(lastBlock)
 		if err != nil {
 			zap.S().Errorf("HasBlock err.%v", err)
@@ -147,7 +155,8 @@ func (r RemoteFileTask) DoTask() {
 			if err = r.DingFile.WriteBlock(lastBlock, rawBlock); err != nil {
 				zap.S().Errorf("last writeBlock err.%v", err)
 			}
-			zap.S().Debugf("file:%s/%s, taskNo:%d, last block：%d(%d)write done, range：%d-%d.", r.orgRepo, r.FileName, r.TaskNo, lastBlock, blockNumber, lastBlockStartPos, lastBlockEndPos)
+			zap.S().Debugf("from:%s, %s/%s, taskNo:%d, last block：%d(%d)write done, range：%d-%d.", r.Domain, r.OrgRepo, r.FileName, r.TaskNo, lastBlock, blockNumber, lastBlockStartPos, lastBlockEndPos)
+			data.ReportFileProcess(r.Context, lastReportPos, curPos, consts.StatusDownloaded)
 		}
 	}
 	if curPos != rangeEndPos {
@@ -160,17 +169,17 @@ func (r RemoteFileTask) OutResult() {
 		select {
 		case data, ok := <-r.Queue:
 			if !ok {
-				zap.S().Debugf("OutResult r.Queue close %s/%s", r.orgRepo, r.FileName)
+				zap.S().Debugf("OutResult r.Queue close taskNo:%d, %s/%s", r.TaskNo, r.OrgRepo, r.FileName)
 				return
 			}
 			select {
 			case r.ResponseChan <- data:
 			case <-r.Context.Done():
-				zap.S().Debugf("OutResult remote Context.Done() %s/%s", r.orgRepo, r.FileName)
+				zap.S().Debugf("OutResult remote Context.Done() %s/%s", r.OrgRepo, r.FileName)
 				return
 			}
 		case <-r.Context.Done():
-			zap.S().Debugf("OutResult remote ctx err, fileName:%s/%s,err:%v", r.orgRepo, r.FileName, r.Context.Err())
+			zap.S().Debugf("OutResult remote ctx err, fileName:%s/%s,err:%v", r.OrgRepo, r.FileName, r.Context.Err())
 			return
 		}
 	}
@@ -182,8 +191,8 @@ func (r RemoteFileTask) GetResponseChan() chan []byte {
 
 func (r RemoteFileTask) getFileRangeFromRemote(wg *sync.WaitGroup, startPos, endPos int64, contentChan chan<- []byte) {
 	headers := make(map[string]string)
-	if r.authorization != "" {
-		headers["authorization"] = r.authorization
+	if r.Authorization != "" {
+		headers["authorization"] = r.Authorization
 	}
 	headers["range"] = fmt.Sprintf("bytes=%d-%d", startPos, endPos-1)
 	defer func() {
@@ -194,7 +203,7 @@ func (r RemoteFileTask) getFileRangeFromRemote(wg *sync.WaitGroup, startPos, end
 	chunkByteLen := 0
 	var contentEncoding, contentLengthStr = "", ""
 
-	if err := util.GetStream(r.hfUrl, headers, config.SysConfig.GetReqTimeOut(), func(resp *http.Response) error {
+	if err := util.GetStream(fmt.Sprintf("%s%s", r.Domain, r.Uri), headers, config.SysConfig.GetReqTimeOut(), func(resp *http.Response) error {
 		contentEncoding = resp.Header.Get("content-encoding")
 		contentLengthStr = resp.Header.Get("content-length")
 		for {
@@ -227,6 +236,7 @@ func (r RemoteFileTask) getFileRangeFromRemote(wg *sync.WaitGroup, startPos, end
 			}
 		}
 	}); err != nil {
+		// todo 降级操作
 		zap.S().Errorf("GetStream err.%v", err)
 		return
 	}
@@ -258,4 +268,8 @@ func (r RemoteFileTask) getFileRangeFromRemote(wg *sync.WaitGroup, startPos, end
 		zap.S().Warnf("file:%s, taskNo:%d,The block is incomplete. Expected-%d. Accepted-%d", r.FileName, r.TaskNo, endPos-startPos, chunkByteLen)
 		return
 	}
+}
+
+func getRemoteUrl(hfUri string) string {
+	return fmt.Sprintf("%s%s", config.SysConfig.GetHFURLBase(), hfUri)
 }

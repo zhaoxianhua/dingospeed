@@ -12,64 +12,66 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-package cache
+package data
 
 import (
+	"context"
+
 	"dingospeed/pkg/common"
 	"dingospeed/pkg/config"
+	"dingospeed/pkg/consts"
 
 	"github.com/dgraph-io/ristretto/v2"
+	"go.uber.org/zap"
 )
 
 // 缓存预读取的文件块，默认每个文件16个块
 
 var FileBlockCache Cache[string, []byte]
+var fileProcessChan chan common.FileProcess
 
-func InitCache() {
-	if FileBlockCache == nil {
-		// 默认使用ristretto
-		if config.SysConfig.Cache.Type == 0 {
-			cache, err := ristretto.NewCache(&ristretto.Config[string, []byte]{
-				NumCounters: 1e7,     // 计数器数量，用于预估缓存项的使用频率
-				MaxCost:     1 << 30, // 缓存的最大成本，这里设置为 1GB
-				BufferItems: 64,      // 每个分片的缓冲区大小
-			})
-			if err != nil {
-				panic(err)
+func InitData() {
+	if config.SysConfig.Cache.Enabled {
+		if FileBlockCache == nil {
+			// 默认使用ristretto
+			if config.SysConfig.Cache.Type == 0 {
+				cache, err := ristretto.NewCache(&ristretto.Config[string, []byte]{
+					NumCounters: 1e7,     // 计数器数量，用于预估缓存项的使用频率
+					MaxCost:     1 << 30, // 缓存的最大成本，这里设置为 1GB
+					BufferItems: 64,      // 每个分片的缓冲区大小
+				})
+				if err != nil {
+					panic(err)
+				}
+				FileBlockCache = &RistrettoCache[string, []byte]{
+					RCache: cache,
+					cost:   1,
+				}
+			} else {
+				FileBlockCache = common.NewSafeMap[string, []byte]()
 			}
-			FileBlockCache = &RistrettoCache[string, []byte]{
-				RCache: cache,
-				cost:   1,
-			}
-		} else {
-			FileBlockCache = common.NewSafeMap[string, []byte]()
 		}
+	}
+	if config.SysConfig.IsCluster() {
+		fileProcessChan = make(chan common.FileProcess, 50)
 	}
 }
 
-type Cache[K comparable, V any] interface {
-	Set(key K, value V)
-	Get(key K) (V, bool)
-	Delete(key K)
-	Wait()
+func GetFileProcessChan() <-chan common.FileProcess {
+	return fileProcessChan
 }
 
-type RistrettoCache[K string, V any] struct {
-	RCache *ristretto.Cache[K, V]
-	cost   int64
-}
-
-func (f *RistrettoCache[K, V]) Set(key K, value V) {
-	f.RCache.SetWithTTL(key, value, f.cost, config.SysConfig.GetPrefetchBlockTTL())
-}
-
-func (f *RistrettoCache[K, V]) Get(key K) (V, bool) {
-	return f.RCache.Get(key)
-}
-
-func (f *RistrettoCache[K, V]) Delete(key K) {
-	f.RCache.Del(key)
-}
-func (f *RistrettoCache[K, V]) Wait() {
-	f.RCache.Wait()
+func ReportFileProcess(ctx context.Context, startPos, endPos int64, status int32) {
+	if config.SysConfig.IsCluster() {
+		if v := ctx.Value(consts.KeyProcessId); v != nil {
+			processId := v.(int64)
+			zap.S().Infof("processId:%d, startPos:%d, endPos:%d, status:%d", processId, startPos, endPos, status)
+			fileProcessChan <- common.FileProcess{
+				ProcessId: processId,
+				StartPos:  startPos,
+				EndPos:    endPos,
+				Status:    status,
+			}
+		}
+	}
 }

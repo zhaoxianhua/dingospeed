@@ -19,9 +19,11 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"dingospeed/internal/model"
+	"dingospeed/pkg/consts"
 	myerr "dingospeed/pkg/error"
 
 	"github.com/go-playground/validator/v10"
@@ -34,6 +36,7 @@ var SysConfig *Config
 var SystemInfo *model.SystemInfo
 
 type Config struct {
+	Id               int32
 	Server           ServerConfig     `json:"server" yaml:"server"`
 	Download         Download         `json:"download" yaml:"download"`
 	Cache            Cache            `json:"cache" yaml:"cache"`
@@ -41,6 +44,18 @@ type Config struct {
 	Retry            Retry            `json:"retry" yaml:"retry"`
 	TokenBucketLimit TokenBucketLimit `json:"tokenBucketLimit" yaml:"tokenBucketLimit"`
 	DiskClean        DiskClean        `json:"diskClean" yaml:"diskClean"`
+	Scheduler        Scheduler        `json:"scheduler" yaml:"scheduler"`
+	Database         Database         `json:"database" yaml:"database"`
+	mu               sync.RWMutex
+}
+
+type Database struct {
+	Redis Redis `json:"redis" yaml:"redis"`
+}
+
+type Redis struct {
+	Host string `json:"host" yaml:"host"`
+	Port int    `json:"port" yaml:"port"`
 }
 
 type ServerConfig struct {
@@ -75,6 +90,14 @@ type Cache struct {
 	PrefetchMemoryUsedThreshold float64 `json:"prefetchMemoryUsedThreshold" yaml:"prefetchMemoryUsedThreshold" validate:"min=50,max=99"`
 	PrefetchBlocks              int64   `json:"prefetchBlocks" yaml:"prefetchBlocks" validate:"min=1,max=32"`      // 读取块数据，预先缓存的块数据数量
 	PrefetchBlockTTL            int64   `json:"prefetchBlockTTL" yaml:"prefetchBlockTTL" validate:"min=1,max=120"` // 读取块数据，预先缓存的块数据数量
+}
+
+type Scheduler struct {
+	Mode            string `json:"mode" yaml:"mode"`
+	InstanceId      string `json:"instanceId" yaml:"instanceId"`
+	Addr            string `json:"addr" yaml:"addr"`
+	HeartbeatPeriod int    `json:"heartbeatPeriod" yaml:"heartbeatPeriod"`
+	BatchSaveNum    int    `json:"batchSaveNum" yaml:"batchSaveNum"`
 }
 
 type Retry struct {
@@ -176,6 +199,22 @@ func (c *Config) EnableMetric() bool {
 
 func (c *Config) CacheCleanStrategy() string {
 	return c.DiskClean.CacheCleanStrategy
+}
+
+func (c *Config) IsCluster() bool {
+	return c.GetSchedulerModel() == consts.SchedulerModeCluster
+}
+
+func (c *Config) SetSchedulerModel(mode string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Scheduler.Mode = mode
+}
+
+func (c *Config) GetSchedulerModel() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Scheduler.Mode
 }
 
 func (c *Config) SetDefaults() {

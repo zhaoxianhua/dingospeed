@@ -114,6 +114,9 @@ func GetStream(url string, headers map[string]string, timeout time.Duration, f f
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
+	if !(strings.Contains(url, consts.Huggingface) || strings.Contains(url, consts.Hfmirror)) {
+		req.Header.Set(consts.RequestSourceInner, Itoa(1))
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
