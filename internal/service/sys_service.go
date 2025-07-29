@@ -27,7 +27,7 @@ func NewSysService() *SysService {
 	sysSvc := &SysService{}
 	once.Do(
 		func() {
-			if config.SysConfig.Cache.Enabled {
+			if config.SysConfig.EnableReadBlockCache() {
 				go sysSvc.MemoryUsed()
 			}
 

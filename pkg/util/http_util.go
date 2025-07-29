@@ -223,12 +223,13 @@ func GetStream(requestURL string, headers map[string]string, timeout time.Durati
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-
 	client, clientErr := NewHTTPClientWithProxy(config.SysConfig.GetHttpProxy(), timeout, ProxyIsAvailable)
 	if clientErr != nil {
 		return clientErr
 	}
-
+	if !IsOfficialDomain(targetURL) {
+		req.Header.Set(consts.RequestSourceInner, Itoa(1))
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		zap.S().Warnf("URL请求失败: %s, 错误: %v", escapedURL, err)
@@ -311,7 +312,7 @@ func ResponseStream(c echo.Context, fileName string, headers map[string]string, 
 		select {
 		case b, ok := <-content:
 			if !ok {
-				zap.S().Infof("ResponseStream complete, %s.", fileName)
+				zap.S().Infof("ResponseStream complete, %s", fileName)
 				return nil
 			}
 			if len(b) > 0 {
@@ -410,4 +411,7 @@ func ForwardRequest(requestURL string, originalReq *http.Request, timeout time.D
 		Headers:    respHeaders,
 		Body:       body,
 	}, nil
+}
+func IsOfficialDomain(url string) bool {
+	return strings.Contains(url, consts.Huggingface) || strings.Contains(url, consts.Hfmirror)
 }
