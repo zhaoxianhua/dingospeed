@@ -29,36 +29,36 @@ func (s *SchedulerService) Register() {
 	s.schedulerDao.Client = s.Client
 	response, err := s.schedulerDao.Register()
 	if err != nil {
+		runModeChange(consts.SchedulerModeStandalone)
 		return
 	}
+	zap.S().Infof("enter cluster mode......")
 	config.SysConfig.Id = response.Id
-	go s.heartbeat()
-	go s.reportFileProcess()
+	go s.Heartbeat()
+	go s.ReportFileProcess()
 }
 
-func (s *SchedulerService) heartbeat() {
-	ticker := time.NewTicker(time.Duration(config.SysConfig.Scheduler.HeartbeatPeriod) * time.Second)
+func (s *SchedulerService) Heartbeat() {
+	ticker := time.NewTicker(time.Duration(config.SysConfig.Scheduler.Discovery.HeartbeatPeriod) * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			err := s.schedulerDao.Heartbeat()
 			if err != nil {
-				zap.S().Errorf("speed:%s connect err.%v", config.SysConfig.Scheduler.InstanceId, err)
-				config.SysConfig.SetSchedulerModel(consts.SchedulerModeStandalone)
+				zap.S().Errorf("speed:%s connect err.%v", config.SysConfig.Scheduler.Discovery.InstanceId, err)
+				runModeChange(consts.SchedulerModeStandalone)
 				break
 			}
-			if config.SysConfig.GetSchedulerModel() == consts.SchedulerModeStandalone {
-				config.SysConfig.SetSchedulerModel(consts.SchedulerModeCluster)
-			}
+			runModeChange(consts.SchedulerModeCluster)
 		case <-s.Ctx.Done():
-			zap.S().Warnf("heartbeat stop.")
+			zap.S().Warnf("Heartbeat stop.")
 			return
 		}
 	}
 }
 
-func (s *SchedulerService) reportFileProcess() {
+func (s *SchedulerService) ReportFileProcess() {
 	for {
 		select {
 		case file, ok := <-data.GetFileProcessChan():
@@ -72,8 +72,23 @@ func (s *SchedulerService) reportFileProcess() {
 				Status:    file.Status,
 			})
 		case <-s.Ctx.Done():
-			zap.S().Warnf("reportFileProcess stop.")
+			zap.S().Warnf("ReportFileProcess stop.")
 			return
 		}
 	}
+}
+
+func runModeChange(mode string) {
+	if mode == consts.SchedulerModeStandalone {
+		if config.SysConfig.GetSchedulerModel() == consts.SchedulerModeCluster {
+			zap.S().Warnf("changed to standalone mode......")
+			config.SysConfig.SetSchedulerModel(consts.SchedulerModeStandalone)
+		}
+	} else if mode == consts.SchedulerModeCluster {
+		if config.SysConfig.GetSchedulerModel() == consts.SchedulerModeStandalone {
+			zap.S().Warnf("changed to cluster mode......")
+			config.SysConfig.SetSchedulerModel(consts.SchedulerModeCluster)
+		}
+	}
+
 }

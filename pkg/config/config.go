@@ -98,11 +98,17 @@ type ReadBlock struct {
 }
 
 type Scheduler struct {
-	Mode            string `json:"mode" yaml:"mode"`
+	Mode            string    `json:"mode" yaml:"mode"`
+	Addr            string    `json:"addr" yaml:"addr"`
+	MinimumFileSize int64     `json:"minimumFileSize" yaml:"minimumFileSize"`
+	Discovery       Discovery `json:"discovery" yaml:"discovery"`
+}
+
+type Discovery struct {
 	InstanceId      string `json:"instanceId" yaml:"instanceId"`
-	Addr            string `json:"addr" yaml:"addr"`
+	Host            string `json:"host" yaml:"host"`
+	Port            int    `json:"port" yaml:"port"`
 	HeartbeatPeriod int    `json:"heartbeatPeriod" yaml:"heartbeatPeriod"`
-	MinimumFileSize int64  `json:"minimumFileSize" yaml:"minimumFileSize"`
 }
 
 type Retry struct {

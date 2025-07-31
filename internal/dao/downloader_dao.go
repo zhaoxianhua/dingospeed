@@ -145,7 +145,7 @@ func (d *DownloaderDao) getRequestDomainScheduler(dataType, orgRepo, fileName, e
 		Repo:       repo,
 		Name:       fileName,
 		Etag:       etag,
-		InstanceId: config.SysConfig.Scheduler.InstanceId,
+		InstanceId: config.SysConfig.Scheduler.Discovery.InstanceId,
 		StartPos:   startPos,
 		EndPos:     endPos,
 		FileSize:   fileSize,

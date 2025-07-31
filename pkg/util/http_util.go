@@ -115,7 +115,6 @@ func NewHTTPClientWithProxy(proxyAddr string, timeout time.Duration, proxyIsAvai
 	return client, nil
 }
 
-// Head 方法用于发送带请求头的 HEAD 请求
 func Head(requestURL string, headers map[string]string, timeout time.Duration) (*common.Response, error) {
 	targetURL, err := buildURL(requestURL)
 	if err != nil {
@@ -158,7 +157,6 @@ func Head(requestURL string, headers map[string]string, timeout time.Duration) (
 	}, nil
 }
 
-// Get 方法用于发送带请求头的 GET 请求
 func Get(requestURL string, headers map[string]string, timeout time.Duration) (*common.Response, error) {
 	targetURL, err := buildURL(requestURL)
 	if err != nil {
@@ -208,7 +206,6 @@ func Get(requestURL string, headers map[string]string, timeout time.Duration) (*
 	}, nil
 }
 
-// GetStream 方法用于发送带请求头的 GET 请求并流式处理响应
 func GetStream(requestURL string, headers map[string]string, timeout time.Duration, f func(r *http.Response) error) error {
 	targetURL, err := buildURL(requestURL)
 	if err != nil {

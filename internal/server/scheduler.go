@@ -30,7 +30,6 @@ func (s *SchedulerServer) Start(ctx context.Context) error {
 	if !config.SysConfig.IsCluster() {
 		return nil
 	}
-	zap.S().Infof("enter cluster mode......")
 	ssl := config.SysConfig.Server.Ssl
 	creds := credential(ssl.CrtFile, ssl.KeyFile, ssl.CaFile, "zetyun.com")
 	conn, err := grpc.NewClient(config.SysConfig.Scheduler.Addr, grpc.WithTransportCredentials(creds))

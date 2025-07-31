@@ -22,9 +22,9 @@ func (s *SchedulerDao) Register() (*manager.RegisterResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), consts.RpcRequestTimeout)
 	defer cancel()
 	r, err := s.Client.Register(ctx, &manager.RegisterRequest{
-		InstanceId: config.SysConfig.Scheduler.InstanceId,
-		Host:       config.SysConfig.Server.Host,
-		Port:       int32(config.SysConfig.Server.Port),
+		InstanceId: config.SysConfig.Scheduler.Discovery.InstanceId,
+		Host:       config.SysConfig.Scheduler.Discovery.Host,
+		Port:       int32(config.SysConfig.Scheduler.Discovery.Port),
 		Online:     config.SysConfig.Server.Online,
 	})
 	if err != nil {
