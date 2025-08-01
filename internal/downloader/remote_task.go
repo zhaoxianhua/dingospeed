@@ -216,7 +216,7 @@ func (r *RemoteFileTask) getFileRangeFromRemote(startPos, endPos int64, contentC
 		n                                 int
 	)
 	for i := 0; i < attempts; {
-		if err = util.GetStream(fmt.Sprintf("%s%s", r.Domain, r.Uri), headers, config.SysConfig.GetReqTimeOut(), func(resp *http.Response) error {
+		if err = util.GetStream(r.Domain, r.Uri, headers, config.SysConfig.GetReqTimeOut(), func(resp *http.Response) error {
 			contentEncoding = resp.Header.Get("content-encoding")
 			contentLengthStr = resp.Header.Get("content-length")
 			for {
@@ -250,12 +250,11 @@ func (r *RemoteFileTask) getFileRangeFromRemote(startPos, endPos int64, contentC
 			}
 		}); err != nil {
 			zap.S().Warnf("GetStream err.%v", err)
-			if config.SysConfig.IsCluster() && !util.IsOfficialDomain(r.Domain) {
+			if config.SysConfig.IsCluster() && util.IsInnerDomain(r.Domain) {
 				r.Domain = config.SysConfig.GetHFURLBase()
 				if chunkByteLen > 0 {
 					headers["range"] = fmt.Sprintf("bytes=%d-%d", startPos+int64(chunkByteLen), endPos-1)
 				}
-				zap.S().Infof("try switch to %s downloading", r.Domain)
 				i++
 			} else {
 				break

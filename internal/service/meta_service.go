@@ -194,15 +194,9 @@ func (m *MetaService) RepoRefs(c echo.Context, repoType, org, repo string) error
 }
 
 func (m *MetaService) ForwardToNewSite(c echo.Context) error {
-	target, err := config.SysConfig.GetHFURL()
-	if err != nil {
-		return util.ErrorProxyError(c)
-	}
-
 	req := c.Request()
 	zap.S().Infof("ForwardToNewSite url:%s", req.URL.Path)
-
-	resp, err := m.metaDao.ForwardRefs(target.String(), req, 30*time.Second)
+	resp, err := m.metaDao.ForwardRefs(req, 30*time.Second)
 	if err != nil {
 		zap.S().Errorf("forward request refs err.%v", err)
 		return util.ErrorProxyError(c)
@@ -216,5 +210,5 @@ func (m *MetaService) ForwardToNewSite(c echo.Context) error {
 	var bodyStreamChan = make(chan []byte, consts.RespChanSize)
 	bodyStreamChan <- cacheContent.OriginContent
 	close(bodyStreamChan)
-	return util.ResponseStream(c, target.String(), cacheContent.Headers, bodyStreamChan)
+	return util.ResponseStream(c, req.URL.Path, cacheContent.Headers, bodyStreamChan)
 }

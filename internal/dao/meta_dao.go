@@ -35,20 +35,20 @@ func NewMetaDao(fileDao *FileDao) *MetaDao {
 }
 
 func (m *MetaDao) RepoRefs(repoType string, orgRepo string, authorization string) (*common.Response, error) {
-	refsUrl := fmt.Sprintf("%s/api/%s/%s/refs", config.SysConfig.GetHFURLBase(), repoType, orgRepo)
+	refsUri := fmt.Sprintf("/api/%s/%s/refs", repoType, orgRepo)
 	headers := map[string]string{}
 	if authorization != "" {
 		headers["authorization"] = authorization
 	}
 	resp, err := util.RetryRequest(func() (*common.Response, error) {
-		return util.Get(refsUrl, headers, config.SysConfig.GetReqTimeOut())
+		return util.Get(refsUri, headers, config.SysConfig.GetReqTimeOut())
 	})
 	return resp, err
 }
 
-func (m *MetaDao) ForwardRefs(targetURL string, originalReq *http.Request, timeout time.Duration) (*common.Response, error) {
+func (m *MetaDao) ForwardRefs(originalReq *http.Request, timeout time.Duration) (*common.Response, error) {
 	resp, err := util.RetryRequest(func() (*common.Response, error) {
-		return util.ForwardRequest(targetURL, originalReq, timeout)
+		return util.ForwardRequest(originalReq, timeout)
 	})
 	return resp, err
 }

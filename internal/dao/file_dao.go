@@ -115,11 +115,11 @@ func (f *FileDao) getCommitHfRemote(repoType, orgRepo, commit, authorization str
 }
 
 func (f *FileDao) RemoteRequestMeta(method, repoType, orgRepo, commit, authorization string) (*common.Response, error) {
-	var reqUrl string
+	var reqUri string
 	if commit == "" {
-		reqUrl = fmt.Sprintf("%s/api/%s/%s", config.SysConfig.GetHFURLBase(), repoType, orgRepo)
+		reqUri = fmt.Sprintf("/api/%s/%s", repoType, orgRepo)
 	} else {
-		reqUrl = fmt.Sprintf("%s/api/%s/%s/revision/%s", config.SysConfig.GetHFURLBase(), repoType, orgRepo, commit)
+		reqUri = fmt.Sprintf("/api/%s/%s/revision/%s", repoType, orgRepo, commit)
 	}
 	headers := map[string]string{}
 	if authorization != "" {
@@ -127,9 +127,9 @@ func (f *FileDao) RemoteRequestMeta(method, repoType, orgRepo, commit, authoriza
 	}
 	return util.RetryRequest(func() (*common.Response, error) {
 		if method == consts.RequestTypeHead {
-			return util.Head(reqUrl, headers, config.SysConfig.GetReqTimeOut())
+			return util.Head(reqUri, headers, config.SysConfig.GetReqTimeOut())
 		} else if method == consts.RequestTypeGet {
-			return util.Get(reqUrl, headers, config.SysConfig.GetReqTimeOut())
+			return util.Get(reqUri, headers, config.SysConfig.GetReqTimeOut())
 		} else {
 			return nil, fmt.Errorf("request method err")
 		}
@@ -303,10 +303,10 @@ func (f *FileDao) pathsInfoGenerator(repoType, orgRepo, commit, authorization st
 		for k := range remoteReqFilePathMap {
 			filePaths = append(filePaths, k)
 		}
-		pathsInfoUrl := fmt.Sprintf("%s/api/%s/%s/paths-info/%s", config.SysConfig.GetHFURLBase(), repoType, orgRepo, commit)
-		response, err := f.pathsInfoProxy(pathsInfoUrl, authorization, filePaths)
+		pathsInfoUri := fmt.Sprintf("/api/%s/%s/paths-info/%s", repoType, orgRepo, commit)
+		response, err := f.pathsInfoProxy(pathsInfoUri, authorization, filePaths)
 		if err != nil {
-			zap.S().Errorf("req %s err.%v", pathsInfoUrl, err)
+			zap.S().Errorf("req %s err.%v", pathsInfoUri, err)
 			return nil, myerr.NewAppendCode(http.StatusInternalServerError, fmt.Sprintf("%v", err))
 		}
 		if response.StatusCode != http.StatusOK {
@@ -322,7 +322,7 @@ func (f *FileDao) pathsInfoGenerator(repoType, orgRepo, commit, authorization st
 		remoteRespPathsInfos := make([]common.PathsInfo, 0)
 		err = sonic.Unmarshal(response.Body, &remoteRespPathsInfos)
 		if err != nil {
-			zap.S().Errorf("req %s remoteRespPathsInfos Unmarshal err.%v", pathsInfoUrl, err)
+			zap.S().Errorf("req %s remoteRespPathsInfos Unmarshal err.%v", pathsInfoUri, err)
 			return nil, myerr.NewAppendCode(http.StatusInternalServerError, fmt.Sprintf("%v", err))
 		}
 		for _, item := range remoteRespPathsInfos {
@@ -346,7 +346,7 @@ func (f *FileDao) pathsInfoGenerator(repoType, orgRepo, commit, authorization st
 	return ret, nil
 }
 
-func (f *FileDao) pathsInfoProxy(targetUrl, authorization string, filePaths []string) (*common.Response, error) {
+func (f *FileDao) pathsInfoProxy(targetUri, authorization string, filePaths []string) (*common.Response, error) {
 	data := map[string]interface{}{
 		"paths": filePaths,
 	}
@@ -359,7 +359,7 @@ func (f *FileDao) pathsInfoProxy(targetUrl, authorization string, filePaths []st
 		headers["authorization"] = authorization
 	}
 	return util.RetryRequest(func() (*common.Response, error) {
-		return util.Post(targetUrl, "application/json", jsonData, headers)
+		return util.Post(targetUri, "application/json", jsonData, headers)
 	})
 }
 
