@@ -313,27 +313,38 @@ func ResponseStream(ctx context.Context, c echo.Context, fileName string, header
 	for k, v := range headers {
 		c.Response().Header().Set(k, v)
 	}
-	if fileErrCh != nil {
-		if err := <-fileErrCh; err != nil {
-			if e, ok := err.(myerr.Error); ok {
-				return c.String(e.StatusCode(), err.Error())
-			}
-			return ErrorProxyError(c)
-		}
-	}
 	flusher, ok := c.Response().Writer.(http.Flusher)
 	if !ok {
 		return c.String(http.StatusInternalServerError, "Streaming unsupported!")
 	}
-	c.Response().WriteHeader(http.StatusOK)
+	var wroteHeader, errChClosed = false, false
 	for {
 		select {
 		case b, ok := <-content:
 			if !ok {
+				if fileErrCh != nil && !errChClosed {
+					if err := <-fileErrCh; err != nil {
+						if wroteHeader {
+							zap.S().Warnf("ResponseStream header already written, cannot set error status, file:%s, err:%v", fileName, err)
+							return nil
+						}
+						if e, ok := err.(myerr.Error); ok {
+							return c.String(e.StatusCode(), err.Error())
+						}
+						return ErrorProxyError(c)
+					}
+				}
+				if !wroteHeader {
+					c.Response().WriteHeader(http.StatusOK)
+				}
 				zap.S().Infof("ResponseStream complete, %s", fileName)
 				return nil
 			}
 			if len(b) > 0 {
+				if !wroteHeader {
+					c.Response().WriteHeader(http.StatusOK)
+					wroteHeader = true
+				}
 				if _, err := c.Response().Write(b); err != nil {
 					zap.S().Warnf("ResponseStream write err,file:%s,%v", fileName, err)
 					return ErrorProxyTimeout(c)
@@ -346,6 +357,22 @@ func ResponseStream(ctx context.Context, c echo.Context, fileName string, header
 				}
 			}
 			flusher.Flush()
+		case err, ok := <-fileErrCh:
+			if !ok {
+				errChClosed = true
+				fileErrCh = nil
+				continue
+			}
+			if err != nil {
+				if wroteHeader {
+					zap.S().Warnf("ResponseStream header already written, cannot set error status, file:%s, err:%v", fileName, err)
+					return nil
+				}
+				if e, ok := err.(myerr.Error); ok {
+					return c.String(e.StatusCode(), err.Error())
+				}
+				return ErrorProxyError(c)
+			}
 		case <-ctx.Done():
 			return c.String(http.StatusInternalServerError, ctx.Err().Error())
 		}

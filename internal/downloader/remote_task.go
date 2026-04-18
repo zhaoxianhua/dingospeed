@@ -206,7 +206,7 @@ func (r *RemoteFileTask) OutResult() {
 		select {
 		case chunk, ok := <-r.Queue:
 			if !ok {
-				zap.S().Debugf("end remote outResult close. taskNo:%d, %s/%s", r.TaskNo, r.OrgRepo, r.FileName)
+				zap.S().Debugf("close remote outResult. taskNo:%d, %s/%s", r.TaskNo, r.OrgRepo, r.FileName)
 				return
 			}
 			select {
@@ -216,7 +216,7 @@ func (r *RemoteFileTask) OutResult() {
 				return
 			}
 		case <-r.Context.Done():
-			zap.S().Debugf("end remote outResult fileName:%s/%s,err:%v", r.OrgRepo, r.FileName, r.Context.Err())
+			zap.S().Debugf("close remote outResult fileName:%s/%s,err:%v", r.OrgRepo, r.FileName, r.Context.Err())
 			return
 		}
 	}
