@@ -16,7 +16,6 @@ package util
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"net"
@@ -306,7 +305,7 @@ func doPost(client *http.Client, targetURL string, contentType string, data []by
 	}, nil
 }
 
-func ResponseStream(ctx context.Context, c echo.Context, fileName string, headers map[string]string, content <-chan []byte, fileErrCh chan error) error {
+func ResponseStream(c echo.Context, fileName string, headers map[string]string, content <-chan []byte, fileErrCh chan error) error {
 	c.Response().Header().Set("Content-Type", "text/event-stream")
 	c.Response().Header().Set("Cache-Control", "no-cache")
 	c.Response().Header().Set("Connection", "keep-alive")
@@ -373,8 +372,6 @@ func ResponseStream(ctx context.Context, c echo.Context, fileName string, header
 				}
 				return ErrorProxyError(c)
 			}
-		case <-ctx.Done():
-			return c.String(http.StatusInternalServerError, ctx.Err().Error())
 		}
 	}
 }
