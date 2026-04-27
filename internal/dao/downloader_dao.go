@@ -107,7 +107,7 @@ func (d *DownloaderDao) constructTask(startPos, endPos int64, isInnerRequest boo
 	// 分析下载类型是否全部存在，若文件不完整，返回当前已缓存的最大偏移量
 	fileComplete, curPos = analysisFilePosition(taskParam.DingFile, startPos, endPos)
 	if !fileComplete && !config.SysConfig.Online() { // 文件不完整，且当前节点为离线
-		return nil, myerr.NewAppendCode(http.StatusNotFound, "model file is not exist")
+		return nil, myerr.NewAppendCode(http.StatusNotFound, "Entry not found")
 	}
 	// isInnerRequest为true，即内部请求，是已经被调度过后，设置为内部域名的请求，这种请求将不会再次参与调度，直接做下载即可。
 	if !isInnerRequest && config.SysConfig.IsCluster() && !fileComplete {

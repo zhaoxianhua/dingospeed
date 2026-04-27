@@ -28,7 +28,6 @@ import (
 	"dingospeed/pkg/common"
 	"dingospeed/pkg/config"
 	"dingospeed/pkg/consts"
-	myerr "dingospeed/pkg/error"
 	"dingospeed/pkg/prom"
 
 	"github.com/avast/retry-go"
@@ -310,6 +309,11 @@ func ResponseStream(c echo.Context, fileName string, headers map[string]string, 
 	c.Response().Header().Set("Cache-Control", "no-cache")
 	c.Response().Header().Set("Connection", "keep-alive")
 	for k, v := range headers {
+		// 流式响应不应预设Content-Length，因为数据是流式传输的，无法保证字节数与预估值一致。
+		// 若实际传输字节数与Content-Length不符，客户端会报错（如curl: (18) transfer closed with N bytes remaining to read）。
+		if strings.ToLower(k) == "content-length" {
+			continue
+		}
 		c.Response().Header().Set(k, v)
 	}
 	flusher, ok := c.Response().Writer.(http.Flusher)
@@ -327,10 +331,7 @@ func ResponseStream(c echo.Context, fileName string, headers map[string]string, 
 							zap.S().Warnf("ResponseStream header already written, cannot set error status, file:%s, err:%v", fileName, err)
 							return nil
 						}
-						if e, ok := err.(myerr.Error); ok {
-							return c.String(e.StatusCode(), err.Error())
-						}
-						return ErrorProxyError(c)
+						return MultipleErrorProxyError(err, c)
 					}
 				}
 				if !wroteHeader {
@@ -367,10 +368,7 @@ func ResponseStream(c echo.Context, fileName string, headers map[string]string, 
 					zap.S().Warnf("ResponseStream header already written, cannot set error status, file:%s, err:%v", fileName, err)
 					return nil
 				}
-				if e, ok := err.(myerr.Error); ok {
-					return c.String(e.StatusCode(), err.Error())
-				}
-				return ErrorProxyError(c)
+				return MultipleErrorProxyError(err, c)
 			}
 		}
 	}
