@@ -83,6 +83,7 @@ func (c *CacheFileTask) DoTask() {
 func (c *CacheFileTask) OutResult() {
 	startBlock := c.RangeStartPos / c.DingFile.GetBlockSize()
 	endBlock := (c.RangeEndPos - 1) / c.DingFile.GetBlockSize()
+	blockNumber := c.DingFile.getBlockNumber()
 	curPos := c.RangeStartPos
 	for curBlock := startBlock; curBlock <= endBlock; curBlock++ {
 		if c.Context.Err() != nil {
@@ -118,6 +119,7 @@ func (c *CacheFileTask) OutResult() {
 		chunk := rawBlock[sPos:ePos]
 		select {
 		case c.ResponseChan <- chunk:
+			zap.S().Debugf("%s/%s, taskNo:%d, block：%d(%d)write done, range：%d-%d.", c.OrgRepo, c.FileName, c.TaskNo, curBlock, blockNumber, blockStartPos, blockEndPos)
 		case <-c.Context.Done():
 			return
 		}
